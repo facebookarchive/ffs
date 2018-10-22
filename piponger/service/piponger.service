@@ -1,0 +1,19 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+[Unit]
+Description=uWSGI instance to serve piponger
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+Restart=always
+WorkingDirectory=/srv/piponger/
+ExecStart=/usr/local/bin/uwsgi --plugin python3 --ini main.ini
+
+[Install]
+WantedBy=multi-user.target

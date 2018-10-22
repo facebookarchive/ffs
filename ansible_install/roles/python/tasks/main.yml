@@ -1,0 +1,42 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+---
+# Install Pip3 Packages
+
+- name: Install latest pip version
+  become: true
+  pip:
+    name: pip
+    state: latest
+    executable: pip3
+
+- name: stop celeryd
+  become: yes
+  service: name=celeryd state=stopped
+  ignore_errors: yes
+
+- name: stop celerybeatd
+  become: yes
+  service: name=celerybeatd state=stopped
+  ignore_errors: yes
+
+- name: stop piponger service
+  become: yes
+  systemd: state=stopped name=piponger
+  ignore_errors: yes
+
+- name: Install python3 packages with pip3
+  become: true
+  pip:
+    name: "{{ item }}"
+    state: latest
+    executable: pip3
+  with_items: "{{ pip3_packages | default([]) }}"
+
+- name: Set uwsgi permissions
+  become: true
+  file: dest="/usr/local/bin/uwsgi" state=file
+        mode=0755

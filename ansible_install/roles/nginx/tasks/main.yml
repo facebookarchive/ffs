@@ -1,0 +1,63 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+---
+
+# Prepare Nginx
+
+- name: Install nginx
+  become: yes
+  apt: name=nginx update_cache=yes cache_valid_time=3600
+
+- name: copy nginx config file
+  become: yes
+  copy:
+    src: "{{ piponger_nginx_conf_file }}"
+    dest: "{{ nginx_dest_conf_file }}"
+    force: yes
+
+- name: Activate the stub_status site
+  become: true
+  file: src="{{ nginx_dest_conf_file }}"
+        dest=/etc/nginx/sites-enabled/default
+        state=link
+  notify: restart nginx
+
+- name: Enable nginx as service
+  become: yes
+  command: "{{ item }}"
+  with_items:
+    - systemctl enable nginx.service
+    - systemctl daemon-reload
+    - systemctl restart nginx.service
+  ignore_errors: yes
+
+- name: Enable nginx respawn
+  become: yes
+  lineinfile: dest=/etc/systemd/system/multi-user.target.wants/nginx.service
+              line="Restart=always"
+              insertafter='^\[Service\]'
+              state=present
+
+- name: Reload nginx
+  become: yes
+  command: "{{ item }}"
+  with_items:
+    - systemctl daemon-reload
+    - systemctl restart nginx.service
+  ignore_errors: yes
+
+- name: set correct owner and permissions
+  become: yes
+  file: dest="{{ final_piponger_dir }}" owner=www-data group=www-data mode=0775 recurse=yes
+
+- name: Restart all services
+  become: yes
+  command: "{{ item }}"
+  with_items:
+    - systemctl restart piponger
+    - systemctl restart celeryd
+    - systemctl restart celerybeatd
+  ignore_errors: yes

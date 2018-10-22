@@ -1,0 +1,36 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+# Install & Configure iperf3.1
+
+- name: Check if iperf3.1 is installed
+  command: dpkg-query -W iperf3
+  register: iperf3_check_deb
+  failed_when: iperf3_check_deb.rc > 1
+  changed_when: iperf3_check_deb.rc == 1
+
+- name: Download libiperf
+  get_url:
+    url="{{ libiperf3_url }}"
+    dest="/home/{{ ansible_env.USER }}/{{ libiperf_version }}.deb"
+  when: iperf3_check_deb.rc == 1
+
+- name: Download iperf
+  get_url:
+    url="{{ iperf3_url }}"
+    dest="/home/{{ ansible_env.USER }}/{{ iperf_version }}.deb"
+  when: iperf3_check_deb.rc == 1
+
+- name: Install libiperf
+  apt: deb="/home/{{ ansible_env.USER }}/{{ libiperf_version }}.deb"
+  become: yes
+  when: iperf3_check_deb.rc == 1
+
+- name: Install iperf
+  apt: deb="/home/{{ ansible_env.USER }}/{{ iperf_version }}.deb"
+  become: yes
+  when: iperf3_check_deb.rc == 1

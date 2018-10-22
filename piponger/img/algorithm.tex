@@ -1,0 +1,51 @@
+\documentclass{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+
+\begin{document}
+	
+	% Insert the algorithm
+	\begin{algorithm}
+		\caption{Estimate faulty links}
+		\label{array-sum}
+		\begin{algorithmic}[1]
+			\Procedure{FaultyEstimator}{$P, netmask$} \Comment{P are the results generated from pingers}
+			\State $D = \{\}$
+			
+			\For {each pinger result $pingresult$ in $P$}
+				\State $D_{local} = \{\}$
+				\For {each ponger result $r$ in $pingresult$}
+					\For {each hop $h$ in $r.path$}
+						\State $h = extractNetwork(h, netmask)$ \Comment{Calculate the network of the ip}
+						\State append $r.packetLoss$ to $D_{local}[h]$ \Comment{Group the loss by network address}
+					\EndFor
+				\EndFor
+				\\
+				\For {each network link $n$ in $D_{local}$}
+					\State $e_{max} =$ get the element with most repetitions in $n$
+					
+					\If{$e_{max} > |n| / 2$}  
+						$n.loss$ = $e_{max}$
+					\Else{}
+						$n.loss$ = arithmetic mean of $n$
+					\EndIf
+				\EndFor
+				
+				\State merge $D_{local}$ into $D$  \Comment{Merge the estimated loss for similar hops}
+			\EndFor
+			\\
+			\For {each network link $n$ in $D$}
+				\State $n.mean$ = mean of samples in $n$ \Comment{Mean of the loss per pinger result}
+			\EndFor
+			\\
+			\State $problematicLinks$ = getOutliers($D$) \Comment{Estimate upper loss outliers}
+			\\
+			\State Return $problematicLinks$
+			\EndProcedure
+		\end{algorithmic}
+	\end{algorithm}
+	
+\end{document}

@@ -1,0 +1,12 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+
+libiperf_version: libiperf.3.1
+iperf_version: iperf.3.1
+libiperf3_url: "https://iperf.fr/download/ubuntu/libiperf0_3.1.3-1_amd64.deb"
+iperf3_url: "https://iperf.fr/download/ubuntu/iperf3_3.1.3-1_amd64.deb"

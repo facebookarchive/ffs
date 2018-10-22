@@ -1,0 +1,13 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+temp_piponger_dir: /tmp/piponger/
+final_piponger_dir: /srv/piponger/
+piponger_virtualenv_dir: /srv/piponger/env
+piponger_virtualenv_python_exec: /srv/piponger/env/bin/python3
+requeriments_file: /srv/piponger/requirements.txt
+piponger_service_file: "../piponger/service/piponger.service"
+dest_service_file: /etc/systemd/system/piponger.service

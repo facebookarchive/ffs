@@ -1,0 +1,153 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+---
+# Install & Configure Common Tools
+
+- name: Create the piponger group
+  become: yes
+  become_user: root
+  group:
+    name: piponger
+    state: present
+
+- name: Create the piponger user
+  become: yes
+  become_user: root
+  user:
+    name: piponger
+    # created with:
+    # python -c 'import crypt; print crypt.crypt("p1p0ng3rss0_woho", "$1$S4lt345fsOMG$")'
+    password: "$1$S4lt345f$SVLxKadEME/NRLxCTLYWH1"
+    groups: "sudo,piponger"
+    append: true
+    state: present
+    shell: /bin/bash       # Defaults to /bin/bash
+    system: no             # Defaults to no
+    createhome: yes        # Defaults to yes
+    home: /home/piponger   # Defaults to /home/<username>
+
+- name: Creates temporal piponger dir
+  become: yes
+  file: path="{{ temp_piponger_dir }}" state=directory
+
+- name: Set temp dir permissions
+  become: true
+  file: dest="{{ temp_piponger_dir }}" state=directory
+        mode=0777
+        owner={{ ansible_user }}
+        group={{ ansible_user }}
+        recurse=yes
+
+- name: Creates piponger dir
+  become: yes
+  file: path="{{ final_piponger_dir }}" state=directory
+
+- name: Add host key to know hosts
+  become: no
+  delegate_to: localhost
+  local_action: command ssh-keyscan {{ ansible_default_ipv4.address }} >> ~/.ssh/known_hosts
+
+- name: define manual rsync
+  become: no
+  delegate_to: localhost
+  environment:
+    RSYNC_PASSWORD: "{{ ansible_ssh_pass }}"
+  local_action: command sshpass -p "{{ ansible_ssh_pass }}" rsync -av --exclude "../piponger/env/"  "../piponger/" {{ ansible_user }}@{{ ansible_default_ipv4.address }}:"{{ temp_piponger_dir }}"
+
+- name: copy files to final destination
+  become: yes
+  command: rsync -ah {{ temp_piponger_dir }}. {{ final_piponger_dir }}
+
+- name: Empty remote directory
+  become: yes
+  file:
+    state: absent
+    path: "{{ piponger_virtualenv_dir }}"
+
+- name: Manually create the initial virtualenv
+  command: virtualenv "{{ piponger_virtualenv_dir }}" -p python3 creates="{{ piponger_virtualenv_dir }}"
+
+- name: Install requirements
+  become: yes
+  become_user: root
+  pip:
+    requirements: "{{ requeriments_file }}"
+    virtualenv: "{{ piponger_virtualenv_dir }}"
+    virtualenv_python: python3
+
+- name: Install python dublin traceroute
+  become: yes
+  become_user: root
+  pip:
+    name: "git+https://github.com/facebookexperimental/ffs/python-dublin-traceroute"
+    virtualenv: "{{ piponger_virtualenv_dir }}"
+    virtualenv_python: python3
+
+- name: Copy the configuration template
+  become: true
+  template:
+    src: templates/config_default.cfg
+    dest: "/srv/piponger/config_default.cfg"
+
+- name: set correct owner and permissions
+  become: yes
+  file: dest="{{ final_piponger_dir }}" owner=www-data group=www-data mode=0775 recurse=yes
+
+- name: Set CAP_NET_RAW+ep on piponger_virtualenv_python_exec
+  become: yes
+  capabilities:
+    path: "{{ piponger_virtualenv_python_exec | realpath }}"
+    capability: CAP_NET_RAW+ep
+    state: present
+
+- name: install celeryd init script
+  become: yes
+  copy: src="../piponger/service/celeryd.service" dest=/etc/init.d/celeryd owner=root group=root mode=0755
+
+- name: install celeryd sysconfig
+  become: yes
+  copy: src="../piponger/service/celeryd.config" dest=/etc/default/celeryd owner=root group=root mode=0640
+
+- name: enable celeryd service
+  become: yes
+  service: name=celeryd enabled=yes
+
+- name: start celeryd
+  become: yes
+  service: name=celeryd state=restarted
+
+- name: install celerybeatd init script
+  become: yes
+  copy: src="../piponger/service/celerybeatd.service" dest=/etc/init.d/celerybeatd owner=root group=root mode=0755
+
+- name: install celerybeatd sysconfig
+  become: yes
+  copy: src="../piponger/service/celerybeatd.config" dest=/etc/default/celerybeatd owner=root group=root mode=0640
+
+- name: enable celerybeatd service
+  become: yes
+  service: name=celerybeatd enabled=yes
+
+- name: start celerybeatd
+  become: yes
+  service: name=celerybeatd state=restarted
+
+- name: install piponger systemd unit file
+  become: yes
+  copy: src="{{ piponger_service_file }}" dest="{{ dest_service_file }}"
+
+- name: Enable piponger as service
+  become: yes
+  command: "{{ item }}"
+  with_items:
+    - systemctl enable piponger.service
+    - systemctl daemon-reload
+    - systemctl restart piponger.service
+  ignore_errors: yes
+
+- name: start service
+  become: yes
+  systemd: state=started name=piponger daemon_reload=yes

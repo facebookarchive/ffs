@@ -1,0 +1,11 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+temp_piponger_dir: /tmp/piponger/
+final_piponger_dir: /srv/piponger/
+server_name: 0.0.0.0
+nginx_dest_conf_file: /etc/nginx/sites-available/default
+piponger_nginx_conf_file: "../piponger/nginx/piponger.conf"

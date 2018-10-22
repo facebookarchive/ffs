@@ -1,0 +1,12 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+
+remote_lib_hostname: "https://github.com/mfontanini/libtins"
+remote_tag: "v4.0"
+dest_dir: "/tmp/libtins"
+build_dir: "/tmp/libtins/build"

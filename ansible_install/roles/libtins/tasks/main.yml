@@ -1,0 +1,38 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+# Install & Configure libtins
+
+- name: clone repository
+  git: repo="{{ remote_lib_hostname }}"
+       dest="{{ dest_dir }}"
+       accept_hostkey=yes
+       version="{{ remote_tag }}"
+
+- name: create build dir
+  file: state=directory path={{ build_dir }}
+
+- name: prepare cmake
+  command: "{{ item }} chdir={{ build_dir }}"
+  with_items:
+    - "cmake .."
+
+# Build the default target
+- make:
+    chdir: "{{ build_dir }}"
+
+# Run `install` target as root
+- make:
+    chdir: "{{ build_dir }}"
+    target: install
+  become: yes
+
+- name: update local shared libraries
+  command: "{{ item }}"
+  with_items:
+    - ldconfig
+  become: yes

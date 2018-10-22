@@ -1,0 +1,49 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+# Install & Configure Common Tools
+
+- name: 'install python2'
+  become: yes
+  become_user: root
+  gather_facts: no
+  command: sudo apt-get -y install python-simplejson
+
+- name: Install common tools
+  apt: pkg="{{ item }}" state=present force=yes
+  become: yes
+  become_user: root
+  with_items:
+    - curl
+    - gcc
+    - make
+    - cmake
+    - nmap
+    - wget
+    - htop
+    - libpcap-dev
+    - cmake-data
+    - checkinstall
+    - pkg-config
+    - build-essential
+    - git
+    - mcrypt
+    - nginx
+    - curl
+    - redis-server
+    - python
+    - python3
+    - python3-dev
+    - python3-pip
+    - htop
+    - tree
+    - ssh
+    - vim
+    - net-tools
+    - libcgraph6
+    - graphviz
+    - libgraphviz-dev

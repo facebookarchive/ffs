@@ -1,0 +1,39 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+- name: Make sure we have a 'piponger' group
+  become: yes
+  group:
+    name: piponger
+    state: present
+
+- name: Add www-data to piponger group
+  become: yes
+  user: name=www-data groups=piponger append=yes state=present createhome=yes
+
+- name: Add celery to piponger group
+  become: yes
+  user: name=celery groups=piponger append=yes state=present createhome=yes
+
+- name: Set temp dir permissions
+  become: yes
+  file: dest="{{ piponger_scripts_dir }}" state=directory
+        mode=0750
+        group=piponger
+        recurse=yes
+
+- name: Allow 'piponger' group to have passwordless sudo for the piponger scripts
+  become: yes
+  blockinfile:
+    path: /etc/sudoers
+    block: |
+      {{ item.msg }}
+    validate: 'visudo -cf %s'
+    marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item.name }}"
+  with_items:
+    - { name: fbtracert, msg: "%piponger  ALL=(ALL) NOPASSWD: /srv/piponger/scripts/call_fbtracert.sh" }
+    - { name: iperfclient, msg: "%piponger  ALL=(ALL) NOPASSWD: /srv/piponger/scripts/call_iperf_client.sh" }
+    - { name: iperfserver, msg: "%piponger  ALL=(ALL) NOPASSWD: /srv/piponger/scripts/create_iperf_server.sh" }

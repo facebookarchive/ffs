@@ -1,0 +1,97 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+# Install & Configure Postgresql
+
+- name: stop celeryd
+  become: yes
+  service: name=celeryd state=stopped
+  ignore_errors: yes
+
+- name: stop celerybeatd
+  become: yes
+  service: name=celerybeatd state=stopped
+  ignore_errors: yes
+
+- name: stop piponger service
+  become: yes
+  systemd: state=stopped name=piponger
+  ignore_errors: yes
+
+- name: Install Postgres
+  apt: name={{ item }} update_cache=yes cache_valid_time=3600 state=present
+  become: yes
+  become_user: root
+  with_items:
+  - postgresql
+  - postgresql-contrib
+  - libpq-dev
+  - python-psycopg2
+  tags: packages
+
+#- name: add new configuration to "pg_hba.conf"
+#  become: yes
+#  become_user: root
+#  blockinfile:
+#    dest: /etc/postgresql/9.5/main/pg_hba.conf
+#    block: |
+#      host    all             all             0.0.0.0/0                md5
+
+- name: Create piponger database
+  become: yes
+  become_user: postgres
+  postgresql_db: name="{{ dbname }}" template='template0' encoding='UTF-8' lc_collate='en_US.UTF-8' lc_ctype='en_US.UTF-8' state=present
+
+- name: Create piponger_user role for database
+  become: yes
+  become_user: postgres
+  postgresql_user: db="{{ dbname }}" user="{{ dbuser }}" password="{{ database_passwd }}" priv=ALL state=present
+
+- name: Start the Postgresql service
+  become: yes
+  become_user: root
+  service:
+    name: postgresql
+    state: started
+    enabled: true
+
+- name: Importing piponger data
+  become: yes
+  become_user: postgres
+  shell: psql piponger < "{{ database_schema_location }}"
+
+- name: ensure user has access to database
+  become: yes
+  become_user: postgres
+  postgresql_user: db="{{ dbname }}" name="{{ dbuser }}" password="{{ database_passwd }}" priv=ALL
+
+- name: Grant table permissions for piponger_user role
+  become: yes
+  become_user: postgres
+  postgresql_privs: db="{{ dbname }}" schema=public state=present privs=SELECT,INSERT,UPDATE type=table roles="{{ dbuser }}" grant_option=no objs=ALL_IN_SCHEMA
+
+- name: Grant sequence permissions for piponger_user role
+  become: yes
+  become_user: postgres
+  postgresql_privs: db="{{ dbname }}" schema=public state=present privs=USAGE type=sequence roles="{{ dbuser }}" grant_option=no objs=ALL_IN_SCHEMA
+
+- name: Ensure user does not have unnecessary privilege
+  become: yes
+  become_user: postgres
+  postgresql_user: name="{{ dbuser }}" role_attr_flags=NOSUPERUSER,NOCREATEDB
+
+- name: Ensure no other user can access the database
+  become: yes
+  become_user: postgres
+  postgresql_privs: db="{{ dbname }}" role=PUBLIC type=database priv=ALL state=absent
+
+- name: Restart postgresql
+  become: yes
+  become_user: root
+  service:
+    name: postgresql
+    state: restarted

@@ -1,0 +1,12 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+
+dublin_traceroute_hostname: "https://github.com/facebookexperimental/ffs/dublin-traceroute"
+dest_dir: "/tmp/dublin_traceroute"
+build_dir: "/tmp/dublin_traceroute/build"
+python3_exec_path: "/usr/bin/python3"

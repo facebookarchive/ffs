@@ -1,0 +1,62 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the BSD-style license found in the
+# LICENSE file in the root directory of this source tree.
+
+---
+# Install & Configure dublin traceroute
+
+- name: clone repository
+  git: repo="{{ dublin_traceroute_hostname }}"
+       dest="{{ dest_dir }}"
+       accept_hostkey=yes
+
+- name: create build dir
+  file: state=directory path={{ build_dir }}
+
+- name: build
+  command: "{{ item }} chdir={{ build_dir }}"
+  with_items:
+    - "cmake .."
+
+# Build the default target
+- make:
+    chdir: "{{ build_dir }}"
+
+# Run `install` target as root
+- make:
+    chdir: "{{ build_dir }}"
+    target: install
+  become: yes
+
+- name: update local shared libraries
+  command: "{{ item }}"
+  with_items:
+    - ldconfig
+  become: yes
+
+- name: Set CAP_NET_RAW+ep on /usr/local/bin/dublin-traceroute
+  become: yes
+  capabilities:
+    path: /usr/local/bin/dublin-traceroute
+    capability: CAP_NET_RAW+ep
+    state: present
+
+- pip:
+    name: git+https://github.com/facebookexperimental/ffs/python-dublin-traceroute
+    executable: pip3
+  become: yes
+
+- name: Get real python3 path
+  become: yes
+  shell: "readlink -f {{ python3_exec_path }}"
+  register: real_py3_path
+
+
+- name: Set CAP_NET_RAW+ep on /usr/bin/python3
+  become: yes
+  capabilities:
+    path: "{{ real_py3_path.stdout }}"
+    capability: CAP_NET_RAW+ep
+    state: present
