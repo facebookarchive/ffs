@@ -4,15 +4,23 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from flask import jsonify
+from flask import jsonify, Blueprint, url_for
 import models
 from main import (app, db, auth, logger, pipong_is_pinger, pipong_is_ponger,
                   pipong_is_master)
 from sqlalchemy import desc
 import inspect
 
+bp = Blueprint('common', __name__)
 
-@app.route('/')
+
+def has_no_empty_params(rule):
+    defaults = rule.defaults if rule.defaults is not None else ()
+    arguments = rule.arguments if rule.arguments is not None else ()
+    return len(defaults) >= len(arguments)
+
+
+@bp.route('/', methods=('GET', 'POST'))
 @auth.login_required
 def home():
     """
@@ -116,3 +124,14 @@ def home():
         }
 
     return jsonify(result_dict)
+
+
+@bp.route("/site-map", methods=('GET', 'POST'))
+def site_map():
+    links = []
+    for rule in app.url_map.iter_rules():
+        if has_no_empty_params(rule):
+            url = url_for(rule.endpoint, **(rule.defaults or {}))
+            links.append({url: [rule.endpoint, list(rule.methods)]})
+
+    return jsonify(links)

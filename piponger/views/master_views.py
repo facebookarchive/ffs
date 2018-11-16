@@ -4,20 +4,22 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from flask import request, abort, jsonify, send_from_directory
+from flask import request, abort, jsonify, send_from_directory, Blueprint
 import models
 import tasks.master_tasks
-from main import app, db, auth, logger, pipong_is_master
+from main import db, auth, logger, pipong_is_master
 from datetime import datetime
 import inspect
 from sqlalchemy import inspect as isql
+
+bp = Blueprint('master', __name__)
 
 
 def object_as_dict(obj):
     return {c.key: getattr(obj, c.key) for c in isql(obj).mapper.column_attrs}
 
 
-@app.route('/force_create_iteration')
+@bp.route('/force_create_iteration')
 @auth.login_required
 def force_create_iteration():
     """
@@ -34,7 +36,7 @@ def force_create_iteration():
     return jsonify({'result': 'success', 'msg': 'Force new iteration called'})
 
 
-@app.route('/api/v1.0/master/register_pinger_result', methods=['POST'])
+@bp.route('/api/v1.0/master/register_pinger_result', methods=['POST'])
 @auth.login_required
 def register_pinger_result():
     """
@@ -114,10 +116,12 @@ def register_pinger_result():
         "{}: Pinger result registrered. Pinger address:{} result: {}".format(
             current_f_name, ip_addr, str(pinger_result)))
 
+    # TODO: check if all the pingers have sent the result for this iteration
+
     return jsonify({'result': 'success'})
 
 
-@app.route('/api/v1.0/master/register_ponger', methods=['POST'])
+@bp.route('/api/v1.0/master/register_ponger', methods=['POST'])
 @auth.login_required
 def register_ponger():
     """
@@ -158,7 +162,7 @@ def register_ponger():
     return jsonify({'result': 'success'})
 
 
-@app.route('/api/v1.0/master/register_pinger', methods=['POST'])
+@bp.route('/api/v1.0/master/register_pinger', methods=['POST'])
 @auth.login_required
 def register_pinger():
     """
@@ -199,7 +203,7 @@ def register_pinger():
     return jsonify({'result': 'success'})
 
 
-@app.route('/get_last_result_plot', methods=['GET'])
+@bp.route('/get_last_result_plot', methods=['GET'])
 @auth.login_required
 def get_result_plot():
     """
@@ -207,9 +211,12 @@ def get_result_plot():
     :return:
     """
 
-    inspect.currentframe().f_code.co_name
+    current_f_name = inspect.currentframe().f_code.co_name
 
     if not pipong_is_master():
+        logger.debug(
+            "{}: This node is not a master}".format(
+                current_f_name))
         abort(404)
 
     return send_from_directory(

@@ -5,22 +5,19 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from flask import Flask
+from flask import Flask, url_for, jsonify
 from flask_sqlalchemy import SQLAlchemy
 import os
 import logging.handlers
 from flask_httpauth import HTTPBasicAuth
 import socket
-import celery
+from celery import Celery
 from celery.schedules import crontab
-
-from tasks.common_tasks import report_to_master
-from tasks.master_tasks import remove_old_nodes
 
 
 # define celery object and parameters
 def make_celery(flask_app):
-    celery_obj = celery.Celery(
+    celery_obj = Celery(
         flask_app.import_name,
         broker=flask_app.config['CELERY_BROKER_URL'],
         backend=flask_app.config['CELERY_RESULT_BACKEND'])
@@ -51,6 +48,7 @@ app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config.from_object(__name__)
 app.config.from_pyfile('config_default.cfg')
+app.config.from_pyfile('config.cfg')
 app.config.from_envvar('FLASKR_SETTINGS', silent=True)
 
 app.config['CELERYBEAT_SCHEDULE'] = {
@@ -69,7 +67,8 @@ app.config['CELERYBEAT_SCHEDULE'] = {
     }
 }
 
-make_celery(app)
+celery = make_celery(app)
+logger.debug("main: {}".format(celery))
 
 auth = HTTPBasicAuth()
 db = SQLAlchemy()
@@ -113,6 +112,28 @@ def get_local_ip():
             + ["no IP found"])[0]
 
 
+def register_views():
+    from views import common_views
+    app.register_blueprint(common_views.bp)
+
+    if pipong_is_master():
+        from views import master_views
+        app.register_blueprint(master_views.bp)
+
+    if pipong_is_pinger():
+        from views import pinger_views
+        app.register_blueprint(pinger_views.bp)
+
+    if pipong_is_ponger():
+        from views import ponger_views
+        app.register_blueprint(ponger_views.bp)
+
+
+from tasks.common_tasks import report_to_master
+from tasks.master_tasks import remove_old_nodes
+
 report_to_master.apply_async(
     args=[app.config['API_PORT'], app.config['API_PROTOCOL']], kwargs={})
 remove_old_nodes.apply_async(args=[], kwargs={})
+
+register_views()

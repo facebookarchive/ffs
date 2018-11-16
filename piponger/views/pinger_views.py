@@ -4,16 +4,17 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from flask import request
-from flask import jsonify
+from flask import request, Blueprint, jsonify
 import models
 import tasks.pinger_tasks
 import traceback
-from main import app, db, auth, logger, pipong_is_pinger
+from main import db, auth, logger, pipong_is_pinger
 import inspect
 
+bp = Blueprint('pinger', __name__)
 
-@app.route('/api/v1.0/start_session', methods=['POST'])
+
+@bp.route('/api/v1.0/start_session', methods=['POST'])
 @auth.login_required
 def start_session():
     """

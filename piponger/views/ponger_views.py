@@ -4,15 +4,16 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from flask import request
-from flask import jsonify
+from flask import request, Blueprint, jsonify
 import models
 import tasks.ponger_tasks
 from main import app, db, auth, logger, pipong_is_ponger
 import inspect
 
+bp = Blueprint('ponger', __name__)
 
-@app.route('/api/v1.0/iperf/server', methods=['POST'])
+
+@bp.route('/api/v1.0/iperf/server', methods=['POST'])
 @auth.login_required
 def request_iperf_server():
     """
