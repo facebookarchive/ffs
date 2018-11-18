@@ -79,14 +79,14 @@ def register_pinger_result():
 
     pinger_iteration_t = db.session.query(
         models.MasterIterationPinger).filter_by(
-            master_iteration_id=master_iteration_id,
-            registered_pinger_id=registrered_t.id).first()
+        master_iteration_id=master_iteration_id,
+        registered_pinger_id=registrered_t.id).first()
 
     if not pinger_iteration_t:
         logger.error("{}: Error, the master pinger iteration was not found. "
                      "Master iter:{} registered pinger:{}".format(
-                         current_f_name, master_iteration_id,
-                         registrered_t.id))
+            current_f_name, master_iteration_id,
+            registrered_t.id))
         return jsonify({
             'result': 'failure',
             'msg': 'the master pinger iteration was not found'
@@ -95,13 +95,13 @@ def register_pinger_result():
     if pinger_iteration_t.status == "FINISHED":
         logger.error("{}: Error, the pinger iteration was finished. "
                      "Pinger iteration:{} status:{}".format(
-                         current_f_name, pinger_iteration_t.id,
-                         pinger_iteration_t.status))
+            current_f_name, pinger_iteration_t.id,
+            pinger_iteration_t.status))
         return jsonify({
             'result':
-            'failure',
+                'failure',
             'msg':
-            ' the master pinger iteration is already finished'
+                ' the master pinger iteration is already finished'
         })
 
     s = db.session()
@@ -116,7 +116,19 @@ def register_pinger_result():
         "{}: Pinger result registrered. Pinger address:{} result: {}".format(
             current_f_name, ip_addr, str(pinger_result)))
 
-    # TODO: check if all the pingers have sent the result for this iteration
+    res = tasks.master_tasks.check_master_iteration_done(master_iteration_id)
+    logger.debug(
+        "{}: check_master_iteration_done: {}".format(
+            current_f_name, res))
+
+    if res['is_finished']:
+        master_it = db.session.query(models.MasterIteration).filter_by(id=master_iteration_id).first()
+        if master_it:
+            master_it.status = "FINISHED"
+            s.commit()
+
+            # analyse last iteration results
+            tasks.master_tasks.analyse_iteration.apply_async(args=[master_iteration_id], kwargs={})
 
     return jsonify({'result': 'success'})
 

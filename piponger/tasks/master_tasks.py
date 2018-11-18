@@ -239,7 +239,7 @@ def analyse_iteration(master_iteration_id):
         for k, v in node_data_final.items()
     }
 
-    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=5.5)
+    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=5)
 
     node_colors = [G.node[n]['mean'] for n in G.nodes()]
 
@@ -301,15 +301,14 @@ def create_iteration():
         desc(models.MasterIteration.created_date)).limit(1).first()
 
     if previous_master_iter:
-        logger.debug("{}: Previous_master_iter: {}".format(
-            current_f_name, previous_master_iter.id))
+        logger.debug("{}: Previous_master_iter: {} status:{}".format(
+            current_f_name, previous_master_iter.id, previous_master_iter.status))
 
-        previous_master_iter.status = 'FINISHED'
-        s.commit()
-
-        # analyse last iteration results
-        analyse_iteration.apply_async(
-            args=[previous_master_iter.id], kwargs={})
+        if previous_master_iter.status != 'FINISHED':
+            logger.error(
+                "{}: Cannot start a new iteration while the previous one (id:{}) is not FINISHED (status:{})".format(
+                    current_f_name, previous_master_iter.id, previous_master_iter.status))
+            return None
 
     # create a new master iteration
     master_ite_t = models.MasterIteration()
@@ -387,5 +386,78 @@ def remove_old_nodes():
     logger.debug("{}: Old pongers: {}".format(current_f_name,
                                               ponger_t.count()))
     ponger_t.delete()
+
+    s.commit()
+
+
+@celery.task(time_limit=120, soft_time_limit=120)
+def check_master_iteration_done(master_iteration_id):
+    """
+    Check if for the specific iteration all the pingers have sent their results
+    :return:
+    """
+    current_f_name = inspect.currentframe().f_code.co_name
+
+    logger.info("{}: check_master_iteration_done called".format(current_f_name))
+
+    master_it = db.session.query(models.MasterIteration).filter_by(id=master_iteration_id).first()
+    if master_it is None:
+        logger.error("{}: No MasterIteration found with id: {}".format(
+            current_f_name, master_iteration_id))
+        return None
+
+    count = 0
+    pinger_size = len(master_it.master_iteration_pinger)
+    for master_pinger_it in master_it.master_iteration_pinger:
+        if master_pinger_it.status == "FINISHED":
+            count += 1
+
+    is_finished = False
+    if count >= pinger_size:
+        is_finished = True
+
+        s = db.session()
+        master_it.status = 'FINISHED'
+        s.commit()
+
+        # big info message on the logs for easy visualization
+        logger.info("{}: ################################".format(current_f_name))
+        logger.info("{}: # ITERATION id:{} FINISHED".format(current_f_name, master_iteration_id))
+        logger.info("{}: ################################".format(current_f_name))
+
+    if count > pinger_size:
+        logger.warn("{}: count > pinger_size {}>{}".format(
+            current_f_name, count, pinger_size))
+        count = pinger_size
+
+    return {'is_finished': is_finished, 'percentage': (count/float(pinger_size)) * 100}
+
+
+@celery.task(time_limit=120, soft_time_limit=120)
+def finish_old_iterations():
+    """
+    Finish the iterations that are older than 30 minutes
+    :return:
+    """
+    current_f_name = inspect.currentframe().f_code.co_name
+
+    logger.info("{}: Remove_old_nodes called".format(current_f_name))
+
+    if not pipong_is_master():
+        return None
+
+    since = datetime.now() - timedelta(minutes=30)
+
+    s = db.session()
+
+    master_t = db.session.query(models.MasterIteration).filter(
+        or_(models.MasterIteration.created_date is None,
+            models.MasterIteration.created_date < since))
+
+    logger.debug("{}: Old iterations: {}".format(current_f_name,
+                                                    master_t.count()))
+
+    for e in master_t:
+        e.status = "FINISHED"
 
     s.commit()

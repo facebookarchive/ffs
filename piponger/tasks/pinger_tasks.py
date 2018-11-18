@@ -221,6 +221,7 @@ def do_dublin_tracert(tracert_id):
             npaths=npaths)
 
         success = False
+        tracert_results = ""
         try:
             tracert_results = dublin.traceroute()
 
@@ -291,7 +292,7 @@ def perform_pipong_iteration_3(result, pinger_iteration_id):
     master_remote_id = iter_t.remote_id
 
     s = db.session()
-    iter_t.status = "FINISHED"
+    iter_t.status = "RUNNING_FINISHING"
     s.commit()
 
     iteration_result = []
@@ -360,6 +361,10 @@ def perform_pipong_iteration_3(result, pinger_iteration_id):
     try:
         post_url = ("http://{}:{}/api/v1.0/master/"
                     "register_pinger_result".format(master_host, master_port))
+
+        iter_t.status = "FINISHED"
+        s.commit()
+
         try:
             post_data = {
                 "master_remote_id": master_remote_id,
@@ -400,6 +405,8 @@ def perform_pipong_iteration_2(result, pinger_iteration_id):
     logger.info("{}: Perform_pipong_iteration_2".format(current_f_name))
     logger.info("{}: Input:{} pinger_iteration_id:{}".format(
         current_f_name, result, pinger_iteration_id))
+
+    s = db.session()
 
     ponger_t = db.session.query(
         models.Ponger).filter_by(pinger_iteration_id=pinger_iteration_id)
@@ -469,7 +476,6 @@ def perform_pipong_iteration_2(result, pinger_iteration_id):
         logger.info("{}: Unique_path_port for ponger: {} {}".format(
             current_f_name, pong.address, unique_path_port))
 
-        s = db.session()
         for path_port in unique_path_port:
             logger.debug(
                 "{}: Creating iperf pinger_iteration_id:{} ponger_port_id:{} ".
@@ -492,6 +498,12 @@ def perform_pipong_iteration_2(result, pinger_iteration_id):
         logger.debug("{}: Task creating iperf tasks ponger_id:{}".format(
             current_f_name, pong.id))
         task_list.append(do_iperf3_client.s(pong.id))
+
+    iter_t = db.session.query(
+        models.PingerIteration).filter_by(id=pinger_iteration_id).first()
+    if iter_t:
+        iter_t.status = "RUNNING_IPERF"
+        s.commit()
 
     chord(task_list)(perform_pipong_iteration_3.s(pinger_iteration_id))
 
@@ -602,6 +614,12 @@ def perform_pipong_iteration_1(pinger_iteration_id):
         logger.debug("{}: Task creating tracert tasks tracert_id:{}".format(
             current_f_name, row.id))
         task_list.append(do_dublin_tracert.s(row.id))
+
+    iter_t = db.session.query(
+        models.PingerIteration).filter_by(id=pinger_iteration_id).first()
+    if iter_t is None:
+        iter_t.status = "RUNNING_TRACEROUTE"
+        s.commit()
 
     # run async tasks with callback
     chord(task_list)(perform_pipong_iteration_2.s(pinger_iteration_id))

@@ -15,7 +15,7 @@ bp = Blueprint('ponger', __name__)
 
 @bp.route('/api/v1.0/iperf/server', methods=['POST'])
 @auth.login_required
-def request_iperf_server():
+def start_iperf_server():
     """
     This method is to be executed by a pinger.
     The ponger reserves a port to be used exclusivelly by the requesting pinger
@@ -23,7 +23,7 @@ def request_iperf_server():
     """
     current_f_name = inspect.currentframe().f_code.co_name
 
-    logger.info("{}: Request_iperf_servers".format(current_f_name))
+    logger.info("{}: start_iperf_server".format(current_f_name))
 
     if not pipong_is_ponger():
         return jsonify({

@@ -223,10 +223,15 @@ A GET request to the master API server (generally at port 5000) must be similar 
     "is_ponger": false
   },
   "master_info": {
-    "last_iteration_status": {
+    "current_iteration": {
       "created_date": "1/1/2011 12:12:33",
       "problematic_hosts": [
         "192.168.1.2", "192.168.22.101"
+      ],
+     "last_iteration": {
+      "created_date": "1/1/2011 10:12:33",
+      "problematic_hosts": [
+        "192.168.1.2"
       ]
     },
     "registrered_pingers": [],

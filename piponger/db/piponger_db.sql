@@ -522,6 +522,9 @@ ALTER TABLE ONLY public.tracert ALTER COLUMN id SET DEFAULT nextval('public.trac
 
 INSERT INTO public.pinger_iteration_status_type VALUES ('CREATED');
 INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING');
+INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING_TRACEROUTE');
+INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING_IPERF');
+INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING_FINISHING');
 INSERT INTO public.pinger_iteration_status_type VALUES ('FINISHED');
 INSERT INTO public.pinger_iteration_status_type VALUES ('ERROR');
 

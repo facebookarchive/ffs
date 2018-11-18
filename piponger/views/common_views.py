@@ -83,23 +83,28 @@ def home():
         result_dict['ponger_info'] = {'pinger_port_list': pinger_port_list}
 
     if is_master:
-        last_iteration_status = {}
         registrered_pingers = []
         registrered_pongers = []
+        result_dict['master_info'] = {}
 
-        previous_master_iter = db.session.query(
-            models.MasterIteration).filter_by(status='FINISHED').order_by(
-                desc(models.MasterIteration.created_date)).limit(1).first()
+        master_iter_q = db.session.query(models.MasterIteration).order_by(
+            desc(models.MasterIteration.created_date)).limit(2).all()
 
-        if previous_master_iter:
-            logger.debug("{}: Previous_master_iter: {}".format(
-                current_f_name, previous_master_iter.id))
-            last_iteration_status[
-                'created_date'] = previous_master_iter.created_date
-            last_iteration_status['problematic_hosts'] = [
-                it_res.problematic_host
-                for it_res in previous_master_iter.master_iteration_result
-            ]
+        for i in range(len(master_iter_q)):
+            m_iter = master_iter_q[i]
+
+            iteration_label = "current_iteration"
+            if i != 0:
+                iteration_label = "previous_iteration"
+
+            result_dict['master_info'][iteration_label] = {
+                'status': m_iter.status,
+                'created_date': m_iter.created_date,
+                'problematic_hosts': [
+                    it_res.problematic_host
+                    for it_res in m_iter.master_iteration_result
+                ]
+            }
 
         r_pingers_t = db.session.query(models.RegisteredPingerNode)
         for pinger in r_pingers_t:
@@ -117,11 +122,8 @@ def home():
                 'api_protocol': ponger.api_protocol
             })
 
-        result_dict['master_info'] = {
-            'last_iteration_status': last_iteration_status,
-            'registrered_pingers': registrered_pingers,
-            'registrered_pongers': registrered_pongers
-        }
+        result_dict['master_info']['registrered_pingers'] = registrered_pingers
+        result_dict['master_info']['registrered_pongers'] = registrered_pongers
 
     return jsonify(result_dict)
 

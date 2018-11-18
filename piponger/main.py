@@ -52,9 +52,9 @@ app.config.from_pyfile('config.cfg')
 app.config.from_envvar('FLASKR_SETTINGS', silent=True)
 
 app.config['CELERYBEAT_SCHEDULE'] = {
-    'create-iteration': {
-        'task': 'tasks.master_tasks.create_iteration',
-        'schedule': crontab(minute="*/30"),
+    'finish-old-iterations': {
+        'task': 'tasks.master_tasks.finish_old_iterations',
+        'schedule': crontab(minute="*/20"),
     },
     'report-to-master': {
         'task': 'tasks.common_tasks.report_to_master',
