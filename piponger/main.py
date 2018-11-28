@@ -44,7 +44,7 @@ logger.setLevel(logging.DEBUG)
 logger.addHandler(syslog)
 
 # Flask config
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='', static_folder='static', template_folder='templates')
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config.from_object(__name__)
 app.config.from_pyfile('config_default.cfg')

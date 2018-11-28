@@ -25,7 +25,7 @@ def do_iperf3_client(ponger_id):
     """
     Petform a iperf3 client connection to a remote host
     The data from the connection is obtained from the db
-    :param iperf_id: the ID of the iperf3 configuration
+    :param ponger_id: the ID of the ponger
     :return:
     """
     current_f_name = inspect.currentframe().f_code.co_name
@@ -59,6 +59,8 @@ def do_iperf3_client(ponger_id):
             max_tries = 20
             client_tries = 0
             success = False
+
+            cmd_result_str = ""
 
             while client_tries < max_tries and success is False:
                 iperf_t.status = "STARTED"
@@ -122,16 +124,13 @@ def do_iperf3_client(ponger_id):
                         success = True
                         iperf_res = json.loads(cmd_result_str)
 
-                        result_dict = {}
-                        result_dict["seconds"] = iperf_res['end']['sum'][
-                            'seconds']
-                        result_dict["bytes"] = iperf_res['end']['sum']['bytes']
-                        result_dict["bits_per_second"] = iperf_res['end'][
-                            'sum']['bits_per_second']
-                        result_dict["lost_percent"] = iperf_res['end']['sum'][
-                            'lost_percent']
-                        result_dict["cpu_utilization_percent"] = iperf_res[
-                            'end']['cpu_utilization_percent']
+                        result_dict = {
+                            "seconds": iperf_res['end']['sum']['seconds'],
+                            "bytes": iperf_res['end']['sum']['bytes'],
+                            "bits_per_second": iperf_res['end']['sum']['bits_per_second'],
+                            "lost_percent": iperf_res['end']['sum']['lost_percent'],
+                            "cpu_utilization_percent": iperf_res['end']['cpu_utilization_percent']
+                        }
 
                         logger.debug(
                             "{}: Iperf client results summarized: "
@@ -173,8 +172,7 @@ def do_iperf3_client(ponger_id):
                 db.session.commit()
 
     except SoftTimeLimitExceeded:
-        iperf_t.status = "FAILURE"
-        db.session.commit()
+        # todo: add failure to all iperf that exceeded time limit
         return None
 
 
@@ -184,7 +182,7 @@ def do_dublin_tracert(tracert_id):
     """
     Perform a dublin traceroute against a remote host on a remote port
     The parameters for this traceroute execution are defined on the db
-    :param pinger_iteration_id: the ID of the iteration to get the tracerts
+    :param tracert_id: the ID of the iteration to get the tracerts
     :return:
     """
     current_f_name = inspect.currentframe().f_code.co_name
@@ -272,6 +270,7 @@ def perform_pipong_iteration_3(result, pinger_iteration_id):
     Get the results, compile them into a JSON string and then
     them to the master node
 
+    :param result: previous result
     :param pinger_iteration_id: the iteration id from the db
     :return:
     """
@@ -396,6 +395,7 @@ def perform_pipong_iteration_2(result, pinger_iteration_id):
     Second iteration of the discovery and monitor
     With the tracert information when find the unique paths
     and use those ports to create multiple iperf sessions
+    :param result: previous result
     :param pinger_iteration_id: the iteration id from the db
     :return:
     """
@@ -539,6 +539,7 @@ def perform_pipong_iteration_1(pinger_iteration_id):
 
     s = db.session()
     iter_t.status = "RUNNING"
+    s.flush()
     s.commit()
 
     src_port_start = 40000
@@ -605,8 +606,6 @@ def perform_pipong_iteration_1(pinger_iteration_id):
         s.add(tracert_t)
         s.flush()
 
-    s.commit()
-
     task_list = []
     tracert_qt = db.session.query(models.Tracert).filter_by(
         pinger_iteration_id=pinger_iteration_id, status='PENDING')
@@ -615,11 +614,9 @@ def perform_pipong_iteration_1(pinger_iteration_id):
             current_f_name, row.id))
         task_list.append(do_dublin_tracert.s(row.id))
 
-    iter_t = db.session.query(
-        models.PingerIteration).filter_by(id=pinger_iteration_id).first()
-    if iter_t is None:
-        iter_t.status = "RUNNING_TRACEROUTE"
-        s.commit()
+    iter_t.status = "RUNNING_TRACEROUTE"
+    s.flush()
+    s.commit()
 
     # run async tasks with callback
     chord(task_list)(perform_pipong_iteration_2.s(pinger_iteration_id))

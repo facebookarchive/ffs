@@ -7,7 +7,7 @@
 
 from main import (app, db, get_local_free_port,
                   pipong_is_pinger, pipong_is_ponger, pipong_is_master,
-                  get_local_ip, register_views)
+                  get_local_ip)
 import tasks
 import unittest
 import models
@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy import desc
 import socket
 import json
+import os.path
 
 
 class PipongerTestCase(unittest.TestCase):
@@ -384,6 +385,14 @@ class PipongerTestCase(unittest.TestCase):
 
         return pinger_results
 
+    def add_ponger_localhost(self):
+        with self.app.app_context():
+            s = db.session()
+            pingp_t = models.RegisteredPongerNode(
+                address='localhost', api_port='5003', api_protocol='http://')
+            s.add(pingp_t)
+            s.commit()
+
     def test_if_master(self):
         """
         Check if instance is master
@@ -412,6 +421,7 @@ class PipongerTestCase(unittest.TestCase):
         """
         rv = self.client.get('/', headers=self.auth_header)
         assert 'application/json' in rv.headers['content-type']
+        assert "capabilities" in str(rv.data)
 
     def test_register_pinger_ponger(self):
         """
@@ -530,24 +540,24 @@ class PipongerTestCase(unittest.TestCase):
             master_it = db.session.query(models.MasterIteration).order_by(
                 desc(models.MasterIteration.created_date)).first()
 
-        rv = self.client.post(
-            '/api/v1.0/start_session',
-            data=json.dumps({
-                'hosts': {
-                    "127.0.0.1": {
-                        "api_port": 5000,
-                        "api_protocol": "http://",
-                    }
-                },
-                'tracert_qty': 1,
-                'master_iteration_id': master_it.id
-            }),
-            follow_redirects=True,
-            headers=self.auth_header,
-            content_type='application/json')
-        assert b'success' in rv.data
+            rv = self.client.post(
+                '/api/v1.0/start_session',
+                data=json.dumps({
+                    'hosts': {
+                        "127.0.0.1": {
+                            "api_port": 5000,
+                            "api_protocol": "http://",
+                        }
+                    },
+                    'tracert_qty': 1,
+                    'master_iteration_id': master_it.id
+                }),
+                follow_redirects=True,
+                headers=self.auth_header,
+                content_type='application/json')
 
-        with self.app.app_context():
+            assert b'success' in rv.data
+
             pinger_it_count = db.session.query(models.PingerIteration).count()
             assert pinger_it_count > 0
 
@@ -672,6 +682,9 @@ class PipongerTestCase(unittest.TestCase):
             content_type='application/json')
         assert b'success' in rv.data
 
+        # add a ponger that is not the same as the pinger
+        self.add_ponger_localhost()
+
         with self.app.app_context():
             tasks.master_tasks.create_iteration()
             master_count = db.session.query(models.MasterIteration).order_by(
@@ -708,6 +721,9 @@ class PipongerTestCase(unittest.TestCase):
             content_type='application/json')
         assert b'success' in rv.data
 
+        # add a ponger that is not the same as the pinger
+        self.add_ponger_localhost()
+
         with self.app.app_context():
             tasks.master_tasks.create_iteration()
             master_count = db.session.query(models.MasterIteration).order_by(
@@ -732,6 +748,21 @@ class PipongerTestCase(unittest.TestCase):
             analyse_result = tasks.master_tasks.analyse_iteration(1)
             assert '10.0.21.0' in analyse_result
 
+            plot_filename = '/tmp/last_generated_result.png'
+
+            if os.path.isfile(plot_filename):
+                try:
+                    os.remove(plot_filename)
+                except OSError:
+                    pass
+
+            master_it = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).first()
+
+            rv = self.client.get('/get_result_plot/{}'.format(master_it.id), headers=self.auth_header)
+            assert 'image/png' in rv.headers['content-type']
+            assert os.path.isfile(plot_filename) is True
+
     def test_check_master_iteration_done(self):
         """
         Check if the results are detected correctly and the iteration is set as finished automatically
@@ -745,6 +776,9 @@ class PipongerTestCase(unittest.TestCase):
             headers=self.auth_header,
             content_type='application/json')
         assert b'success' in rv.data
+
+        # add a ponger that is not the same as the pinger
+        self.add_ponger_localhost()
 
         with self.app.app_context():
             tasks.master_tasks.create_iteration()

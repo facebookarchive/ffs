@@ -10,6 +10,7 @@ from main import (app, db, auth, logger, pipong_is_pinger, pipong_is_ponger,
                   pipong_is_master)
 from sqlalchemy import desc
 import inspect
+import tasks.master_tasks
 
 bp = Blueprint('common', __name__)
 
@@ -33,7 +34,7 @@ def home():
     """
     current_f_name = inspect.currentframe().f_code.co_name
 
-    logger.info('{}: home called'.format(current_f_name))
+    #logger.info('{}: home called'.format(current_f_name))
 
     result_dict = {}
 
@@ -55,6 +56,7 @@ def home():
             desc(models.PingerIteration.created_date)).limit(1).first()
         if iteration:
             last_iteration_status = {
+                'id': iteration.id,
                 'remote_address': iteration.remote_address,
                 'status': iteration.status,
                 'tracert_qty': iteration.tracert_qty,
@@ -87,24 +89,28 @@ def home():
         registrered_pongers = []
         result_dict['master_info'] = {}
 
-        master_iter_q = db.session.query(models.MasterIteration).order_by(
-            desc(models.MasterIteration.created_date)).limit(2).all()
+        i = 0
+        iter_ids = [e.id for e in db.session.query(models.MasterIteration).order_by(desc(models.MasterIteration.created_date)).limit(2).all()]
+        for m_iter_id in iter_ids:
+            m_iter = db.session.query(models.MasterIteration).filter_by(id=m_iter_id).first()
+            it_id = int(m_iter.id)
 
-        for i in range(len(master_iter_q)):
-            m_iter = master_iter_q[i]
-
-            iteration_label = "current_iteration"
-            if i != 0:
-                iteration_label = "previous_iteration"
-
-            result_dict['master_info'][iteration_label] = {
-                'status': m_iter.status,
-                'created_date': m_iter.created_date,
-                'problematic_hosts': [
-                    it_res.problematic_host
-                    for it_res in m_iter.master_iteration_result
-                ]
+            it_info = {
+                'id': int(m_iter.id),
+                'status': str(m_iter.status),
+                'has_graph': True if m_iter.json_graph else False,
+                'created_date': str(m_iter.created_date),
+                'problematic_hosts': [{'host': str(h.problematic_host), 'score':float(h.score)} for h in m_iter.master_iteration_result]
             }
+
+            iteration_label = "previous_iteration"
+            if i == 0:
+                iteration_label = "current_iteration"
+                res = tasks.master_tasks.check_master_iteration_done.apply(args=[it_id])
+                it_info['progress'] = res.get()
+
+            result_dict['master_info'][iteration_label] = it_info
+            i += 1
 
         r_pingers_t = db.session.query(models.RegisteredPingerNode)
         for pinger in r_pingers_t:

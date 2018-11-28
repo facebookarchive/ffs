@@ -65,6 +65,7 @@ class MasterIteration(Base):
         ForeignKey('pinger_iteration_status_type.type_id'),
         nullable=False,
         server_default=text("'CREATED'::text"))
+    json_graph = Column(Text)
 
     master_iteration_pinger = relationship(
         'MasterIterationPinger', back_populates='master_iteration')

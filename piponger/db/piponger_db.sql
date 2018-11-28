@@ -160,7 +160,8 @@ ALTER SEQUENCE public.iteration_id_seq OWNED BY public.pinger_iteration.id;
 CREATE TABLE public.master_iteration (
     id integer NOT NULL,
     created_date timestamp without time zone DEFAULT now() NOT NULL,
-    status text DEFAULT 'CREATED'::text NOT NULL
+    status text DEFAULT 'CREATED'::text NOT NULL,
+    json_graph text
 );
 
 
