@@ -160,7 +160,8 @@ ALTER SEQUENCE public.iteration_id_seq OWNED BY public.pinger_iteration.id;
 CREATE TABLE public.master_iteration (
     id integer NOT NULL,
     created_date timestamp without time zone DEFAULT now() NOT NULL,
-    status text DEFAULT 'CREATED'::text NOT NULL
+    status text DEFAULT 'CREATED'::text NOT NULL,
+    json_graph text
 );
 
 
@@ -522,6 +523,9 @@ ALTER TABLE ONLY public.tracert ALTER COLUMN id SET DEFAULT nextval('public.trac
 
 INSERT INTO public.pinger_iteration_status_type VALUES ('CREATED');
 INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING');
+INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING_TRACEROUTE');
+INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING_IPERF');
+INSERT INTO public.pinger_iteration_status_type VALUES ('RUNNING_FINISHING');
 INSERT INTO public.pinger_iteration_status_type VALUES ('FINISHED');
 INSERT INTO public.pinger_iteration_status_type VALUES ('ERROR');
 

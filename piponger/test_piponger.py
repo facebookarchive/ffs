@@ -5,15 +5,17 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from main import (app, db, metadata, models, tasks, get_local_free_port,
+from main import (app, db, get_local_free_port,
                   pipong_is_pinger, pipong_is_ponger, pipong_is_master,
                   get_local_ip)
+import tasks
 import unittest
-
+import models
 import sqlalchemy as sa
 from sqlalchemy import desc
 import socket
 import json
+import os.path
 
 
 class PipongerTestCase(unittest.TestCase):
@@ -49,8 +51,8 @@ class PipongerTestCase(unittest.TestCase):
 
         engine = sa.create_engine(
             app.config['SQLALCHEMY_DATABASE_URI'])
-        metadata.bind = engine
-        self.metadata = metadata
+        models.metadata.bind = engine
+        self.metadata = models.metadata
 
         with self.app.app_context():
             db.reflect()
@@ -80,6 +82,9 @@ class PipongerTestCase(unittest.TestCase):
             s = db.session()
             s.add(models.PingerIterationStatusType(type_id='CREATED'))
             s.add(models.PingerIterationStatusType(type_id='RUNNING'))
+            s.add(models.PingerIterationStatusType(type_id='RUNNING_TRACEROUTE'))
+            s.add(models.PingerIterationStatusType(type_id='RUNNING_IPERF'))
+            s.add(models.PingerIterationStatusType(type_id='RUNNING_FINISHING'))
             s.add(models.PingerIterationStatusType(type_id='FINISHED'))
             s.add(models.PingerIterationStatusType(type_id='ERROR'))
             s.add(models.TaskStatusType(type_id='PENDING'))
@@ -380,6 +385,14 @@ class PipongerTestCase(unittest.TestCase):
 
         return pinger_results
 
+    def add_ponger_localhost(self):
+        with self.app.app_context():
+            s = db.session()
+            pingp_t = models.RegisteredPongerNode(
+                address='localhost', api_port='5003', api_protocol='http://')
+            s.add(pingp_t)
+            s.commit()
+
     def test_if_master(self):
         """
         Check if instance is master
@@ -408,6 +421,7 @@ class PipongerTestCase(unittest.TestCase):
         """
         rv = self.client.get('/', headers=self.auth_header)
         assert 'application/json' in rv.headers['content-type']
+        assert "capabilities" in str(rv.data)
 
     def test_register_pinger_ponger(self):
         """
@@ -526,24 +540,24 @@ class PipongerTestCase(unittest.TestCase):
             master_it = db.session.query(models.MasterIteration).order_by(
                 desc(models.MasterIteration.created_date)).first()
 
-        rv = self.client.post(
-            '/api/v1.0/start_session',
-            data=json.dumps({
-                'hosts': {
-                    "127.0.0.1": {
-                        "api_port": 5000,
-                        "api_protocol": "http://",
-                    }
-                },
-                'tracert_qty': 1,
-                'master_iteration_id': master_it.id
-            }),
-            follow_redirects=True,
-            headers=self.auth_header,
-            content_type='application/json')
-        assert b'success' in rv.data
+            rv = self.client.post(
+                '/api/v1.0/start_session',
+                data=json.dumps({
+                    'hosts': {
+                        "127.0.0.1": {
+                            "api_port": 5000,
+                            "api_protocol": "http://",
+                        }
+                    },
+                    'tracert_qty': 1,
+                    'master_iteration_id': master_it.id
+                }),
+                follow_redirects=True,
+                headers=self.auth_header,
+                content_type='application/json')
 
-        with self.app.app_context():
+            assert b'success' in rv.data
+
             pinger_it_count = db.session.query(models.PingerIteration).count()
             assert pinger_it_count > 0
 
@@ -581,7 +595,7 @@ class PipongerTestCase(unittest.TestCase):
         assert pinger_count <= 0
         assert ponger_count <= 0
 
-    def test_create_iperf_server(self):
+    def test_create_iperf_server_ponger(self):
         """
         Test to rise an iperf server
         :return:
@@ -668,6 +682,9 @@ class PipongerTestCase(unittest.TestCase):
             content_type='application/json')
         assert b'success' in rv.data
 
+        # add a ponger that is not the same as the pinger
+        self.add_ponger_localhost()
+
         with self.app.app_context():
             tasks.master_tasks.create_iteration()
             master_count = db.session.query(models.MasterIteration).order_by(
@@ -704,6 +721,9 @@ class PipongerTestCase(unittest.TestCase):
             content_type='application/json')
         assert b'success' in rv.data
 
+        # add a ponger that is not the same as the pinger
+        self.add_ponger_localhost()
+
         with self.app.app_context():
             tasks.master_tasks.create_iteration()
             master_count = db.session.query(models.MasterIteration).order_by(
@@ -727,6 +747,107 @@ class PipongerTestCase(unittest.TestCase):
 
             analyse_result = tasks.master_tasks.analyse_iteration(1)
             assert '10.0.21.0' in analyse_result
+
+            plot_filename = '/tmp/last_generated_result.png'
+
+            if os.path.isfile(plot_filename):
+                try:
+                    os.remove(plot_filename)
+                except OSError:
+                    pass
+
+            master_it = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).first()
+
+            rv = self.client.get('/get_result_plot/{}'.format(master_it.id), headers=self.auth_header)
+            assert 'image/png' in rv.headers['content-type']
+            assert os.path.isfile(plot_filename) is True
+
+    def test_check_master_iteration_done(self):
+        """
+        Check if the results are detected correctly and the iteration is set as finished automatically
+        :return:
+        """
+
+        rv = self.client.post(
+            '/api/v1.0/master/register_pinger',
+            data=json.dumps(dict(api_port='1234', api_protocol='http://')),
+            follow_redirects=True,
+            headers=self.auth_header,
+            content_type='application/json')
+        assert b'success' in rv.data
+
+        # add a ponger that is not the same as the pinger
+        self.add_ponger_localhost()
+
+        with self.app.app_context():
+            tasks.master_tasks.create_iteration()
+            master_count = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).count()
+
+            assert master_count == 1
+
+            dummy_res = self.get_dummy_pinger_results()
+
+            for i in range(len(dummy_res)):
+                self.client.post(
+                    '/api/v1.0/master/register_pinger_result',
+                    data=json.dumps({
+                        "master_remote_id": 1,
+                        "local_port": 1234,
+                        "result": dummy_res[i]
+                    }),
+                    follow_redirects=True,
+                    headers=self.auth_header,
+                    content_type='application/json')
+
+            master_it_q = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).first()
+
+            assert master_it_q.status == "FINISHED"
+
+            master_iter_q = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).first()
+            res = tasks.master_tasks.check_master_iteration_done(master_iter_q.id)
+
+            assert 100.0 == int(res['percentage'])
+            assert True is res['is_finished']
+
+    def test_finish_old_iterations(self):
+        """
+        Check finishing old iterations that are probably hanging
+        :return:
+        """
+
+        rv = self.client.post(
+            '/api/v1.0/master/register_pinger',
+            data=json.dumps(dict(api_port='1234', api_protocol='http://')),
+            follow_redirects=True,
+            headers=self.auth_header,
+            content_type='application/json')
+        assert b'success' in rv.data
+
+        with self.app.app_context():
+            tasks.master_tasks.create_iteration()
+            master_count = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).count()
+
+            assert master_count == 1
+
+            master_it_q = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).first()
+
+            s = db.session()
+            master_it_q.created_date = "2000-11-16 17:30:00"
+            s.commit()
+
+            assert master_it_q.status == "CREATED"
+
+            tasks.master_tasks.finish_old_iterations()
+
+            master_it_q = db.session.query(models.MasterIteration).order_by(
+                desc(models.MasterIteration.created_date)).first()
+            assert master_it_q.status == "FINISHED"
 
 
 if __name__ == '__main__':

@@ -223,10 +223,15 @@ A GET request to the master API server (generally at port 5000) must be similar 
     "is_ponger": false
   },
   "master_info": {
-    "last_iteration_status": {
+    "current_iteration": {
       "created_date": "1/1/2011 12:12:33",
       "problematic_hosts": [
         "192.168.1.2", "192.168.22.101"
+      ],
+     "last_iteration": {
+      "created_date": "1/1/2011 10:12:33",
+      "problematic_hosts": [
+        "192.168.1.2"
       ]
     },
     "registrered_pingers": [],
@@ -240,6 +245,16 @@ A GET request to the master API server (generally at port 5000) must be similar 
 ```
 
 Where `capabilities` is a fixed field, and `master_info`, `pinger_info` or `ponger_info` appear according to the capabilities of the server. The latest information from a master iteration appears under the `last_iteration_status` field at the `master_info`. The last_iteration_status carries the problematic host's information that should be used to pinpoint and access the estimated bad hops at the last monitor iteration.
+
+### Web administration
+
+A simple web interface was added to the master node to allow start and visualize the monitor iterations. The monitor interface is active at the `/monitor` URL `(http://node:5003/monitor)`.
+Just press 'start new iteration' button and the system will perform a new iteration. At the end of the iteration click on the 'load network topology' button to load a PNG image of the network topology including the probabilities of failure for each node.
+
+| <img src="piponger/img/webiface.png" width="550">  |
+|:--:|
+| *Figure 3. Web interface.* |
+
 
 ## License
 FFS is BSD licensed, as found in the LICENSE file.

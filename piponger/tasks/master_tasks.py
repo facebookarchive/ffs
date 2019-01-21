@@ -17,7 +17,8 @@ import ast
 import collections
 import ipcalc
 import networkx as nx
-import matplotlib.pyplot as plt
+from networkx.readwrite import json_graph
+import json
 
 from main import app, db, celery, logger, pipong_is_master
 
@@ -111,10 +112,12 @@ def analyse_iteration(master_iteration_id):
 
     pinger_iteration_t = db.session.query(
         models.MasterIterationPinger).filter_by(
-            master_iteration_id=master_iteration_id, status="FINISHED")
+        master_iteration_id=master_iteration_id, status="FINISHED")
 
     logger.debug("{}: Found: {} results".format(current_f_name,
                                                 pinger_iteration_t.count()))
+
+    s = db.session()
 
     node_data = []
     edges = set()
@@ -124,7 +127,7 @@ def analyse_iteration(master_iteration_id):
         except Exception as e:
             logger.error(
                 "{}: Error loading data. Master pinger {} result:{} error:{}".
-                format(current_f_name, p_iter.id, p_iter.result, str(e)))
+                    format(current_f_name, p_iter.id, p_iter.result, str(e)))
             continue
 
         node_data_local = {}
@@ -159,7 +162,7 @@ def analyse_iteration(master_iteration_id):
                 else:
                     node_data_local[bn1] = {
                         'samples':
-                        node_data_local[bn1]['samples'] + [packet_loss]
+                            node_data_local[bn1]['samples'] + [packet_loss]
                     }
 
         # calculate loss by voting (if it is 0) or by mean
@@ -208,8 +211,6 @@ def analyse_iteration(master_iteration_id):
         outliers_index = get_outliers(values)
         logger.debug("{}: outliers_index:{}".format(current_f_name,
                                                     outliers_index))
-
-        s = db.session()
         for i in outliers_index:
             k = sorted_by_value[i][0]
             score = sorted_by_value[i][1]['mean']
@@ -233,29 +234,13 @@ def analyse_iteration(master_iteration_id):
 
     G.add_edges_from([(k[0], k[1]) for k in list(edges)])
 
-    pos = nx.drawing.nx_agraph.graphviz_layout(G, prog='dot')
-    node_labels = {
-        k: '{}\n{:.2f}%'.format(k, v['mean'])
-        for k, v in node_data_final.items()
-    }
+    g_json = json_graph.node_link_data(G)
+    logger.debug("{}: Json graph:{}".format(current_f_name, g_json))
 
-    nx.draw_networkx_labels(G, pos, labels=node_labels, font_size=5.5)
-
-    node_colors = [G.node[n]['mean'] for n in G.nodes()]
-
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        node_color=node_colors,
-        node_size=600,
-        node_shape='o',
-        cmap=plt.cm.OrRd,
-        vmin=0.,
-        vmax=100.)
-    nx.draw_networkx_edges(
-        G, pos, arrowstyle='-|>', arrowsize=20, edge_color='black', width=1)
-
-    plt.savefig('/tmp/last_iter_result.png')
+    master_it = db.session.query(models.MasterIteration).filter_by(id=master_iteration_id).first()
+    if master_it:
+        master_it.json_graph = json.dumps(g_json)
+        s.commit()
 
     return problematic_nodes
 
@@ -294,36 +279,25 @@ def create_iteration():
     tracert_qty = app.config['MASTER_TRACERT_QTY']
 
     s = db.session()
-    pinger_t = db.session.query(models.RegisteredPingerNode).all()
 
     # get last iteration
     previous_master_iter = db.session.query(models.MasterIteration).order_by(
         desc(models.MasterIteration.created_date)).limit(1).first()
 
     if previous_master_iter:
-        logger.debug("{}: Previous_master_iter: {}".format(
-            current_f_name, previous_master_iter.id))
+        logger.debug("{}: Previous_master_iter: {} status:{}".format(
+            current_f_name, previous_master_iter.id, previous_master_iter.status))
 
-        previous_master_iter.status = 'FINISHED'
-        s.commit()
-
-        # analyse last iteration results
-        analyse_iteration.apply_async(
-            args=[previous_master_iter.id], kwargs={})
+        if previous_master_iter.status != 'FINISHED':
+            logger.error(
+                "{}: Cannot start a new iteration while the previous one (id:{}) is not FINISHED (status:{})".format(
+                    current_f_name, previous_master_iter.id, previous_master_iter.status))
+            return None
 
     # create a new master iteration
     master_ite_t = models.MasterIteration()
     s.add(master_ite_t)
     s.flush()
-
-    # create the pingers for this master iteration
-    for pinger in pinger_t:
-        s.add(
-            models.MasterIterationPinger(
-                master_iteration_id=master_ite_t.id,
-                registered_pinger_id=pinger.id,
-                status="RUNNING"))
-
     s.commit()
 
     # start the pinger sessions
@@ -332,6 +306,17 @@ def create_iteration():
         plist = dict(ponger_list)
         if pinger.address in plist.keys():
             del plist[pinger.address]
+
+        if len(plist.keys()) > 0:
+            s.add(
+                models.MasterIterationPinger(
+                    master_iteration_id=master_ite_t.id,
+                    registered_pinger_id=pinger.id,
+                    status="RUNNING"))
+            s.commit()
+        else:
+            # dont call any pinger that does not have pongers to query
+            continue
 
         post_url = "http://{}:{}/api/v1.0/start_session".format(
             pinger.address, pinger.api_port)
@@ -387,5 +372,77 @@ def remove_old_nodes():
     logger.debug("{}: Old pongers: {}".format(current_f_name,
                                               ponger_t.count()))
     ponger_t.delete()
+
+    s.commit()
+
+
+@celery.task(time_limit=120, soft_time_limit=120)
+def check_master_iteration_done(master_iteration_id):
+    """
+    Check if for the specific iteration all the pingers have sent their results
+    :return:
+    """
+
+    current_f_name = inspect.currentframe().f_code.co_name
+    # logger.info("{}: check_master_iteration_done called".format(current_f_name))
+    is_finished = False
+
+    master_it = db.session.query(models.MasterIteration).filter_by(id=master_iteration_id).first()
+    if master_it is None:
+        logger.error("{}: No MasterIteration found with id: {}".format(
+            current_f_name, master_iteration_id))
+        return {'is_finished': is_finished, 'percentage': 0.0}
+
+    count = 0
+    pinger_size = len(master_it.master_iteration_pinger)
+    for master_pinger_it in master_it.master_iteration_pinger:
+        if master_pinger_it.status == "FINISHED":
+            count += 1
+
+    if count >= pinger_size:
+        s = db.session()
+        is_finished = True
+        master_it.status = 'FINISHED'
+        s.commit()
+
+    if count > pinger_size:
+        logger.warn("{}: count > pinger_size {}>{}".format(
+            current_f_name, count, pinger_size))
+        count = pinger_size
+
+    percent = 0
+    if pinger_size > 0:
+        percent = (count / float(pinger_size)) * 100
+
+    return {'is_finished': is_finished, 'percentage': percent, 'count': count,
+            'total': pinger_size}
+
+
+@celery.task(time_limit=120, soft_time_limit=120)
+def finish_old_iterations():
+    """
+    Finish the iterations that are older than 30 minutes
+    :return:
+    """
+    current_f_name = inspect.currentframe().f_code.co_name
+
+    logger.info("{}: Remove_old_nodes called".format(current_f_name))
+
+    if not pipong_is_master():
+        return None
+
+    since = datetime.now() - timedelta(minutes=30)
+
+    s = db.session()
+
+    master_t = db.session.query(models.MasterIteration).filter(
+        or_(models.MasterIteration.created_date is None,
+            models.MasterIteration.created_date < since))
+
+    logger.debug("{}: Old iterations: {}".format(current_f_name,
+                                                 master_t.count()))
+
+    for e in master_t:
+        e.status = "FINISHED"
 
     s.commit()
