@@ -45,8 +45,13 @@
   become: yes
   file: path="{{ final_piponger_dir }}" state=directory
 
-- name: Add host key to know hosts
+- name: Add host key to know hosts (become no)
   become: no
+  delegate_to: localhost
+  local_action: command ssh-keyscan {{ ansible_default_ipv4.address }} >> ~/.ssh/known_hosts
+
+- name: Add host key to know hosts (become yes)
+  become: yes
   delegate_to: localhost
   local_action: command ssh-keyscan {{ ansible_default_ipv4.address }} >> ~/.ssh/known_hosts
 
@@ -90,7 +95,7 @@
   become: true
   template:
     src: templates/config_default.cfg
-    dest: "/srv/piponger/config_default.cfg"
+    dest: "/srv/piponger/config.cfg"
 
 - name: set correct owner and permissions
   become: yes

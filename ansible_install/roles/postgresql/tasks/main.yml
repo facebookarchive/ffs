@@ -49,7 +49,7 @@
 - name: Create piponger_user role for database
   become: yes
   become_user: postgres
-  postgresql_user: db="{{ dbname }}" user="{{ dbuser }}" password="{{ database_passwd }}" priv=ALL state=present
+  postgresql_user: db="{{ dbname }}" user="{{ dbuser }}" password="{{ database_passwd }}" encrypted=yes priv=ALL state=present
 
 - name: Start the Postgresql service
   become: yes
@@ -67,7 +67,7 @@
 - name: ensure user has access to database
   become: yes
   become_user: postgres
-  postgresql_user: db="{{ dbname }}" name="{{ dbuser }}" password="{{ database_passwd }}" priv=ALL
+  postgresql_user: db="{{ dbname }}" name="{{ dbuser }}" password="{{ database_passwd }}" encrypted=yes priv=ALL
 
 - name: Grant table permissions for piponger_user role
   become: yes
