@@ -248,12 +248,16 @@ Where `capabilities` is a fixed field, and `master_info`, `pinger_info` or `pong
 
 ### Web administration
 
-A simple web interface was added to the master node to allow start and visualize the monitor iterations. The monitor interface is active at the `/monitor` URL `(http://node:5003/monitor)`.
-Just press 'start new iteration' button and the system will perform a new iteration. At the end of the iteration click on the 'load network topology' button to load a PNG image of the network topology including the probabilities of failure for each node.
+A simple web interface was added to the master node to allow start and visualize the monitor iterations (Figure 3). The monitor interface is active at the `/monitor` URL `(http://node:5003/monitor)`.
+Just press 'start new iteration' button and the system will perform a new iteration. At the end of the iteration click on one of the 'load network topology' (dynamic or PNG) buttons to load a PNG image or a dynamic view in HTML/Js (Figure 4) of the network topology including the probabilities of failure for each node.
 
 | <img src="piponger/img/webiface.png" width="550">  |
 |:--:|
 | *Figure 3. Web interface.* |
+
+| <img src="piponger/img/webiface.png" width="550">  |
+|:--:|
+| *Figure 4. HTMLisualization of the network.* |
 
 
 ## License
