@@ -5,7 +5,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-from flask import Flask, url_for, jsonify
+from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 import os
 import logging.handlers

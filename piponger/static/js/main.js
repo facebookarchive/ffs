@@ -93,13 +93,13 @@ function update_info() {
 
                         if (val.length > 0) {
                             var tbody_prob = $('<tbody />', {}).appendTo("#master-prob-table table");
-                            var row = $('<tr />', {}).appendTo(tbody_prob);
-                            $.each(val, function(d) {
+                            $.each(val, function(k, v) {
+                                var row = $('<tr />', {}).appendTo(tbody_prob);
                                 $('<td />', {
-                                    'text': d.problematic_host
+                                    'text': v.host
                                 }).appendTo(row);
                                 $('<td />', {
-                                    'text': d.score
+                                    'text': v.score
                                 }).appendTo(row);
                             });
                         }
@@ -110,9 +110,15 @@ function update_info() {
                         if (val == true) {
                             $('#load-img-btn').attr('disabled', false);
                             $('#load-img-btn').next('span').hide();
+
+                            $('#load-net-js-btn').attr('disabled', false);
+                            $('#load-net-js-btn').next('span').hide();
                         } else {
                             $('#load-img-btn').attr('disabled', true);
                             $('#load-img-btn').next('span').show().css('display', 'block');
+
+                            $('#load-net-js-btn').attr('disabled', true);
+                            $('#load-net-js-btn').next('span').show().css('display', 'block');
                         }
                         $('<td />', {
                             'text': val
@@ -230,7 +236,7 @@ $(document).ready(function() {
 
     window.setInterval(function() {
         update_info();
-    }, 1000);
+    }, 2500);
 
     $('#start-btn').on('click', function() {
         if ($(this).attr('disabled')) {
@@ -268,6 +274,24 @@ $(document).ready(function() {
                 $.each(last_gathered_data.master_info.current_iteration, function(key, val) {
                     if (key == "id") {
                         window.open("/get_result_plot/" + val, '_blank');
+                        return true;
+                    }
+                });
+            }
+        }
+
+        return false;
+    });
+
+
+    $('#load-net-js-btn').on('click', function() {
+        if ($(this).attr('disabled')) {
+            return false;
+        } else {
+            if (last_gathered_data && last_gathered_data.hasOwnProperty('master_info')) {
+                $.each(last_gathered_data.master_info.current_iteration, function(key, val) {
+                    if (key == "id") {
+                        window.open("/get_result_plot_js/" + val, '_blank');
                         return true;
                     }
                 });

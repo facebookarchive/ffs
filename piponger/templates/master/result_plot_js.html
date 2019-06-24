@@ -1,0 +1,315 @@
+<!doctype html>
+<!--[if lt IE 7]>
+<html class="no-js lt-ie9 lt-ie8 lt-ie7" lang=""> <![endif]-->
+<!--[if IE 7]>
+<html class="no-js lt-ie9 lt-ie8" lang=""> <![endif]-->
+<!--[if IE 8]>
+<html class="no-js lt-ie9" lang=""> <![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js" lang="">
+<!--<![endif]-->
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>{{ title }}</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <style>
+        body {
+            padding-top: 50px;
+            padding-bottom: 20px;
+        }
+
+        .links line {
+          stroke: #999;
+          stroke-opacity: 0.9;
+        }
+
+        .nodes circle {
+          stroke: #fff;
+          stroke-width: 0.5px;
+        }
+    </style>
+    <link rel="stylesheet" href="/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="/css/main.css">
+
+    <script src="/js/vendor/modernizr-2.8.3-respond-1.4.2.min.js"></script>
+</head>
+
+<body>
+    <!--[if lt IE 8]>
+<p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade
+    your browser</a> to improve your experience.</p>
+<![endif]-->
+    <nav class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+        <div class="container">
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="#">Master node monitor interface - Graph visualization</a>
+            </div>
+            <div id="navbar" class="navbar-collapse collapse">
+                <div class="navbar-right navbar-brand">
+                    <div id="loading-ico" style="display:none;"><span class="glyphicon glyphicon-refresh glyphicon-refresh-animate"></span></div>
+                </div>
+            </div>
+            <!--/.navbar-collapse -->
+        </div>
+    </nav>
+
+    <div style="background-color: #eee; padding-bottom:30px;">
+        <div class="container">
+            <h2>Network visualization for Iteration: #{{ master_iteration_id }}</h2>
+            <div class="row">
+                <div class="col-md-12">
+                    <a id="center-btn" class="btn btn-primary btn" href="#" role="button">Center graph</a> Mouse wheel to zoom, click and drag to move.
+                    <svg id='viz'>
+                        <defs>
+                            <linearGradient spreadMethod="pad" id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:rgb(238, 238, 238);stop-opacity:1;" />
+                                <stop offset="100%" style="stop-color:rgba(0, 0, 0, 0.3);stop-opacity:0.4;" />
+                            </linearGradient>
+                        </defs>
+                        <rect width="100%" height="100%" y="0" x="0" fill="url(#gradient)"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+       <hr>
+
+        <footer>
+            <p>&copy; Facebook Experimental <span id="year">2019</span></p>
+        </footer>
+    </div> <!-- /container -->
+
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.js"></script>
+    <script>
+        window.jQuery || document.write('<script src="js/vendor/jquery-1.11.2.js"><\/script>')
+    </script>
+
+    <script src="/js/vendor/bootstrap.min.js"></script>
+    <script src="/js/vendor/bootbox.min.js"></script>
+    <script src="http://d3js.org/d3.v5.min.js"></script>
+    <script>
+        var graph_data_json = JSON.parse({{ graph_data_json | tojson | safe }});
+
+        var width = $("#viz").parent().outerWidth();
+        var height = 600;
+
+        // https://github.com/d3/d3-scale-chromatic/blob/master/README.md
+        var color = d3.scaleSequential().interpolator(d3.interpolateOrRd).domain([1,100])
+
+        d3.json('/get_result_plot_json/1').then(function(graph) {
+
+            var label = {
+                'nodes': [],
+                'links': []
+            };
+
+            graph.nodes.forEach(function(d, i) {
+                label.nodes.push({node: d});
+                label.nodes.push({node: d});
+                label.links.push({
+                    source: i * 2,
+                    target: i * 2 + 1
+                });
+            });
+
+            var labelLayout = d3.forceSimulation(label.nodes)
+                .force("charge", d3.forceManyBody().strength(-50))
+                .force("link", d3.forceLink(label.links).distance(0).strength(2));
+
+            var graphLayout = d3.forceSimulation(graph.nodes)
+                .force("charge", d3.forceManyBody().strength(-5000))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("x", d3.forceX(width / 2).strength(1))
+                .force("y", d3.forceY(height / 2).strength(1))
+                .force("link", d3.forceLink(graph.links).id(function(d) {return d.id; }).distance(30).strength(1))
+                .on("tick", ticked);
+
+            var adjlist = [];
+
+            graph.links.forEach(function(d) {
+                adjlist[d.source.index + "-" + d.target.index] = true;
+                adjlist[d.target.index + "-" + d.source.index] = true;
+            });
+
+            function neigh(a, b) {
+                return a == b || adjlist[a + "-" + b];
+            }
+
+            var zoom = d3.zoom().scaleExtent([.1, 4]).on("zoom", function() {
+                container.attr("transform", d3.event.transform);
+            });
+            var svg = d3.select("#viz").attr("width", width).attr("height", height);
+            svg.call(zoom);
+
+            var container = svg.append("g");
+
+            // Per-type markers, as they don't inherit styles.
+            svg.append("svg:defs").append("svg:marker")
+                .attr("id", "triangle")
+                .attr("refX", 16.5)
+                .attr("refY", 3)
+                .attr("markerWidth", 15)
+                .attr("markerHeight", 15)
+                .attr("markerUnits","userSpaceOnUse")
+                .attr("orient", "auto")
+                .append("path")
+                .attr("d", "M 0 0 6 3 0 6 1.5 3")
+                .style("fill", "#666");
+
+            var link = container.append("g").attr("class", "links")
+                .attr("marker-end", "url(#triangle)")
+                .selectAll("line")
+                .data(graph.links)
+                .enter()
+                .append("line")
+                .attr("stroke", "#aaa")
+                .attr("stroke-width", "2px");
+
+            var node = container.append("g").attr("class", "nodes")
+                .selectAll("g")
+                .data(graph.nodes)
+                .enter()
+                .append("circle")
+                .attr("r", 10)
+                .attr("fill", function(d) {
+                    //console.log(d);
+                    return color(d.mean);
+                })
+
+            node.on("mouseover", focus).on("mouseout", unfocus);
+
+            node.call(
+                d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended)
+            );
+
+            var labelNode = container.append("g").attr("class", "labelNodes")
+                .selectAll("text")
+                .data(label.nodes)
+                .enter()
+                .append("text")
+                .text(function(d, i) { return d.node.id; })
+                .style("fill", "#000")
+                .style("font-family", "Arial")
+                .style("font-size", 8)
+                .style("font-weight", 900)
+                .style("pointer-events", "none"); // to prevent mouseover/drag capture
+
+            var internalLabelNode = container.append("g").attr("class", "internalLabelNodes")
+                .selectAll("internaltext")
+                .data(label.nodes)
+                .enter()
+                .append("text")
+                .text(function(d, i) { return d.node.mean.toFixed(2) + "%" })
+                .style("fill", "#000")
+                .style("font-family", "Arial")
+                .style("font-size", 5)
+                .style("font-weight", 900)
+                .style("pointer-events", "none");
+
+            node.on("mouseover", focus).on("mouseout", unfocus);
+
+            function ticked() {
+
+                node.call(updateNode);
+                link.call(updateLink);
+
+                labelLayout.alphaTarget(0.3).restart();
+                labelNode.each(function(d, i) {
+                    d.x = d.node.x + 3;
+                    d.y = d.node.y - 10;
+                });
+                labelNode.call(updateNode);
+
+                internalLabelNode.each(function(d, i) {
+                    d.x = d.node.x - 8;
+                    d.y = d.node.y + 1.5;
+                });
+
+                internalLabelNode.call(updateNode);
+            }
+
+            function fixna(x) {
+                if (isFinite(x)) return x;
+                return 0;
+            }
+
+            function focus(d) {
+                var index = d3.select(d3.event.target).datum().index;
+                node.style("opacity", function(o) {
+                    return neigh(index, o.index) ? 1 : 0.1;
+                });
+                labelNode.attr("display", function(o) {
+                  return neigh(index, o.node.index) ? "block": "none";
+                });
+                link.style("opacity", function(o) {
+                    return o.source.index == index || o.target.index == index ? 1 : 0.1;
+                });
+            }
+
+            function unfocus() {
+               labelNode.attr("display", "block");
+               node.style("opacity", 1);
+               link.style("opacity", 1);
+            }
+
+            function updateLink(link) {
+                link.attr("x1", function(d) { return fixna(d.source.x); })
+                    .attr("y1", function(d) { return fixna(d.source.y); })
+                    .attr("x2", function(d) { return fixna(d.target.x); })
+                    .attr("y2", function(d) { return fixna(d.target.y); });
+            }
+
+            function updateNode(node) {
+                node.attr("transform", function(d) {
+                    return "translate(" + fixna(d.x) + "," + fixna(d.y) + ")";
+                });
+            }
+
+            function dragstarted(d) {
+                d3.event.sourceEvent.stopPropagation();
+                if (!d3.event.active) graphLayout.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(d) {
+                d.fx = d3.event.x;
+                d.fy = d3.event.y;
+            }
+
+            function dragended(d) {
+                if (!d3.event.active) graphLayout.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+
+            zoom.scaleTo(svg, 1.6);
+
+            $('#center-btn').on('click', function() {
+                svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity)
+                    .transition().duration(350).call(zoom.scaleTo, 1.6);
+                return false;
+            });
+
+        }); // d3.json
+    </script>
+
+</body>
+
+</html>

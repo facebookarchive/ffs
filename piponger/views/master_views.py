@@ -304,3 +304,68 @@ def get_result_plot(master_iteration_id):
     FigureCanvas(fig).print_png(output)
     return Response(output.getvalue(), mimetype='image/png')
 
+@bp.route('/get_result_plot_json/<master_iteration_id>', methods=['GET'])
+@auth.login_required
+def get_result_plot_json(master_iteration_id):
+    """
+    Get the last result plot data in json
+    :return:
+    """
+
+    current_f_name = inspect.currentframe().f_code.co_name
+
+    if not pipong_is_master():
+        logger.debug(
+            "{}: This node is not a master}".format(
+                current_f_name))
+        abort(404)
+
+    master_it = db.session.query(models.MasterIteration).filter_by(id=master_iteration_id).first()
+    if master_it is None:
+        logger.error("{}: No MasterIteration found with id: {}".format(
+            current_f_name, master_iteration_id))
+        abort(404)
+
+    if not master_it.json_graph:
+        logger.error("{}: Empty json_graph for id: {}".format(
+            current_f_name, master_iteration_id))
+        abort(404)
+
+    js_graph = json.loads(master_it.json_graph)
+
+    for e in js_graph['links']:
+        e['left'] = False
+        e['right'] = True
+
+    return jsonify(js_graph)
+
+@bp.route('/get_result_plot_js/<master_iteration_id>', methods=['GET'])
+@auth.login_required
+def get_result_plot_js(master_iteration_id):
+    """
+    Get the last result plot using html/javascript
+    :return:
+    """
+
+    current_f_name = inspect.currentframe().f_code.co_name
+
+    if not pipong_is_master():
+        logger.debug(
+            "{}: This node is not a master}".format(
+                current_f_name))
+        abort(404)
+
+    master_it = db.session.query(models.MasterIteration).filter_by(id=master_iteration_id).first()
+    if master_it is None:
+        logger.error("{}: No MasterIteration found with id: {}".format(
+            current_f_name, master_iteration_id))
+        abort(404)
+
+    if not master_it.json_graph:
+        logger.error("{}: Empty json_graph for id: {}".format(
+            current_f_name, master_iteration_id))
+        abort(404)
+
+    return render_template('master/result_plot_js.html', title='Result Plot JS', graph_data_json=master_it.json_graph, master_iteration_id=master_iteration_id)
+
+
