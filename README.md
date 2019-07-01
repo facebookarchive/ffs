@@ -255,9 +255,9 @@ Just press 'start new iteration' button and the system will perform a new iterat
 |:--:|
 | *Figure 3. Web interface.* |
 
-| <img src="piponger/img/webiface.png" width="550">  |
+| <img src="piponger/img/jsnodepreview.png" width="550">  |
 |:--:|
-| *Figure 4. HTMLisualization of the network.* |
+| *Figure 4. HTML visualization of the network.* |
 
 
 ## License
